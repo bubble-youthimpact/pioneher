@@ -198,8 +198,9 @@ function initFirebase(){
     firebase.initializeApp(FIREBASE_CONFIG);
     fb=firebase;
     fb.auth().onAuthStateChanged(u=>{
-      setUser(u?{uid:u.uid,name:u.displayName||u.email,email:u.email,photo:u.photoURL}:null);
-      if(u) db().collection("users").doc(u.uid).set({name:u.displayName||"",email:u.email||"",photo:u.photoURL||"",lastLogin:fb.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
+      setUser(u?{uid:u.uid,name:u.displayName||u.email,email:u.email,photo:u.photoURL,provider:(u.providerData[0]||{}).providerId||"password"}:null);
+      if(u){ const doc={email:u.email||"",photo:u.photoURL||"",lastLogin:fb.firestore.FieldValue.serverTimestamp()}; if(u.displayName) doc.name=u.displayName;
+        db().collection("users").doc(u.uid).set(doc,{merge:true}).catch(()=>{}) }
     });
     loadPublicData().catch(()=>{});
     return fb;
@@ -219,6 +220,41 @@ async function signInWithGoogle(){
     }
     return {ok:true};
   }catch(e){ return {error:e.message||"Sign-in didn't complete. Try again."} }
+}
+// Email + password accounts (turn on Authentication → Sign-in method → Email/Password).
+const AUTH_ERRORS = {
+  "auth/invalid-credential":"That email and password don't match. Try again or reset your password.",
+  "auth/wrong-password":"That email and password don't match. Try again or reset your password.",
+  "auth/user-not-found":"That email and password don't match. Try again or reset your password.",
+  "auth/invalid-login-credentials":"That email and password don't match. Try again or reset your password.",
+  "auth/email-already-in-use":"An account with this email already exists. Log in instead.",
+  "auth/weak-password":"Choose a password with at least 8 characters.",
+  "auth/invalid-email":"Enter a valid email address.",
+  "auth/missing-password":"Enter your password.",
+  "auth/too-many-requests":"Too many attempts. Wait a few minutes and try again.",
+  "auth/network-request-failed":"Couldn't connect. Check your internet connection and try again.",
+  "auth/operation-not-allowed":"Email sign-in isn't turned on yet. Please use Google for now."
+};
+const authMsg = e => AUTH_ERRORS[e?.code] || "Something went wrong. Please try again.";
+async function emailSignUp(name,email,password){
+  if(!FB_ON){ setUser({uid:"demo",name,email}); return }
+  await initFirebase();
+  const cred=await fb.auth().createUserWithEmailAndPassword(email,password);
+  await cred.user.updateProfile({displayName:name});
+  cred.user.sendEmailVerification().catch(()=>{});
+  // The sign-in event fired before the name was set, so update it now.
+  setUser({uid:cred.user.uid,name,email,photo:null,provider:"password"});
+  await db().collection("users").doc(cred.user.uid).set({name,email,photo:"",lastLogin:fb.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
+}
+async function emailLogIn(email,password){
+  if(!FB_ON){ setUser({uid:"demo",name:email.split("@")[0],email}); return }
+  await initFirebase();
+  await fb.auth().signInWithEmailAndPassword(email,password);
+}
+async function resetPassword(email){
+  if(!FB_ON) return;
+  await initFirebase();
+  await fb.auth().sendPasswordResetEmail(email);
 }
 async function signOut(){ if(fb) await fb.auth().signOut(); else setUser(null) }
 
@@ -451,17 +487,50 @@ function openAuth(mode){
     <h2>${isUp?"Create your account":"Welcome back"}</h2>
     <p class="sub">${isUp?"Join Pioneher to save your worksheets and track your progress.":"Log in to save your worksheets and see your progress."}</p>
     <button class="google-btn" id="googleBtn">${ICON_GOOGLE}<span>Continue with Google</span></button>
-    <div id="authMsg"></div>
+    <div class="or" aria-hidden="true"><span>or</span></div>
+    <form id="emailAuth" class="auth-form" novalidate>
+      ${isUp?`<div class="field"><label for="au-name">Name</label><input id="au-name" name="name" type="text" autocomplete="name" required></div>`:""}
+      <div class="field"><label for="au-email">Email</label><input id="au-email" name="email" type="email" autocomplete="email" inputmode="email" required></div>
+      <div class="field"><div class="pw-label"><label for="au-pw">Password</label>${isUp?"":`<button type="button" class="link-btn" id="forgotPw">Forgot password?</button>`}</div>
+        <div class="pw-wrap"><input id="au-pw" name="password" type="password" autocomplete="${isUp?"new-password":"current-password"}" ${isUp?'minlength="8"':""} required><button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password">Show</button></div>
+        ${isUp?`<span class="pw-hint">At least 8 characters</span>`:""}</div>
+      <button class="btn btn-blue btn-block" type="submit">${isUp?"Create account":"Log in"}</button>
+    </form>
+    <div id="authMsg" aria-live="polite"></div>
     <p class="switch">${isUp?"Already have an account?":"New to Pioneher?"} <button id="authSwitch">${isUp?"Log in":"Sign up"}</button></p>
     <p class="legal-fine">By continuing, you agree to our ${link("/terms","Terms of Service")} and ${link("/privacy","Privacy Policy")}.</p>
     ${FB_ON?"":`<button class="demo-link" id="demoLogin">Preview the logged-in view</button><button class="demo-link" id="demoAdmin">Preview the admin view</button>`}
   `, m=>{
     $("#authSwitch",m).onclick=()=>openAuth(isUp?"login":"signup");
+    const msg=(t,warn=true)=>{ $("#authMsg",m).innerHTML=`<p class="form-note${warn?" warn":""}">${esc(t)}</p>` };
     $("#googleBtn",m).onclick=async()=>{
       const r=await signInWithGoogle();
       if(r.ok){closeModal();toast("You're signed in.")}
-      else if(r.error) $("#authMsg",m).innerHTML=`<p class="form-note warn">${esc(r.error)}</p>`;
+      else if(r.error) msg(r.error);
     };
+    const pw=$("#au-pw",m), tg=$("#pwToggle",m);
+    tg.onclick=()=>{ const show=pw.type==="password"; pw.type=show?"text":"password"; tg.textContent=show?"Hide":"Show"; tg.setAttribute("aria-label",show?"Hide password":"Show password") };
+    const fp=$("#forgotPw",m);
+    if(fp) fp.onclick=async()=>{
+      const email=$("#au-email",m).value.trim();
+      if(!/^\S+@\S+\.\S+$/.test(email)){ msg("Enter your email above, then press Forgot password."); $("#au-email",m).focus(); return }
+      try{ await resetPassword(email); msg("If there's an account for "+email+", a reset link is on its way. Check your inbox.",false) }
+      catch(e){ msg(authMsg(e)) }
+    };
+    $("#emailAuth",m).onsubmit=async e=>{
+      e.preventDefault();
+      const f=e.target, name=(f.name?.value||"").trim(), email=f.email.value.trim(), password=f.password.value;
+      if(isUp && !name){ msg("Enter your name."); f.name.focus(); return }
+      if(!/^\S+@\S+\.\S+$/.test(email)){ msg("Enter a valid email address."); f.email.focus(); return }
+      if(isUp && password.length<8){ msg("Choose a password with at least 8 characters."); pw.focus(); return }
+      if(!password){ msg("Enter your password."); pw.focus(); return }
+      const btn=f.querySelector("[type=submit]"), label=btn.textContent; btn.disabled=true; btn.textContent=isUp?"Creating account…":"Logging in…";
+      try{
+        if(isUp) await emailSignUp(name,email,password); else await emailLogIn(email,password);
+        closeModal(); toast(isUp?(FB_ON?"Welcome to Pioneher! Check your inbox to verify your email.":"Welcome to Pioneher!"):"You're signed in.");
+      }catch(err){ btn.disabled=false; btn.textContent=label; msg(authMsg(err)) }
+    };
+    setTimeout(()=>($("#au-name",m)||$("#au-email",m)).focus(),50);
     const d=$("#demoLogin",m); if(d) d.onclick=()=>{closeModal();setUser({uid:"demo",name:"Elly Kim",email:"demo@pioneher.org"});toast("Preview: signed in as a sample user.")};
     const da=$("#demoAdmin",m); if(da) da.onclick=()=>{closeModal();setUser({uid:"demo-admin",name:"Pioneher Admin",email:"admin@preview",demoAdmin:true});toast("Preview: signed in as the admin.")};
   });
@@ -690,8 +759,9 @@ function privacyHTML(){
   `This policy explains what information Pioneher collects when you use this website, how we use it, and the choices you have. Pioneher provides mentoring, funding, networking and resources to young female entrepreneurs.`,
   `
   <h2>1. Information we collect</h2>
-  <h3>When you sign in with Google</h3>
-  <p>We receive your name, email address, profile photo and a unique account ID from Google. We only request basic profile access. We never see or store your Google password.</p>
+  <h3>When you create an account</h3>
+  <p><b>With Google:</b> we receive your name, email address, profile photo and a unique account ID from Google. We only request basic profile access, and we never see your Google password.</p>
+  <p><b>With email:</b> we store your name and email address. Your password is handled by Google Firebase Authentication, which stores it in a protected, scrambled form; we can never see it.</p>
   <h3>When you use the curriculum</h3>
   <p>We store your worksheet answers, the links you share (for example a Canva or Google Drive link to your lean canvas or pitch deck), and whether each session is in progress or submitted, with the date.</p>
   <h3>When you fill in a form</h3>
@@ -764,7 +834,7 @@ function termsHTML(){
   <p>Pioneher is for young people learning about entrepreneurship and the people who support them. If you are under 14, or under the age of digital consent where you live, you need a parent's or guardian's permission to create an account or submit forms.</p>
 
   <h2>2. Your account</h2>
-  <p>You sign in with your Google account. Keep it secure and let us know if you think someone else is using it. You can delete your Pioneher account anytime from your profile page.</p>
+  <p>You can sign in with Google or with an email and password. Keep your login details secure and let us know if you think someone else is using your account. You can delete your Pioneher account anytime from your profile page.</p>
 
   <h2>3. Your content</h2>
   <p>You own the work you create here, including worksheet answers, links, fundraisers and materials. You give Pioneher permission to store and display that content only as needed to run the site, for example showing your published fundraiser to visitors. Only post content you have the right to share, and don't post other people's personal information.</p>
@@ -812,13 +882,14 @@ function termsHTML(){
 /* =====================================================================
    DELETE ACCOUNT
    ===================================================================== */
-async function deleteAccount(){
+async function deleteAccount(password){
   const uid=currentUser.uid;
   if(FB_ON){
     await initFirebase();
     const user=fb.auth().currentUser;
-    // Google requires a fresh sign-in before an account can be deleted.
-    await user.reauthenticateWithPopup(new fb.auth.GoogleAuthProvider());
+    // A fresh sign-in is required before an account can be deleted.
+    if(currentUser.provider==="password") await user.reauthenticateWithCredential(fb.auth.EmailAuthProvider.credential(user.email,password));
+    else await user.reauthenticateWithPopup(new fb.auth.GoogleAuthProvider());
     const d=db(), batch=d.batch();
     const [ws,fr,mt]=await Promise.all([
       d.collection("users").doc(uid).collection("worksheets").get(),
@@ -841,7 +912,8 @@ function openDeleteAccount(){
     <h2>Delete your account?</h2>
     <p class="sub">This permanently deletes your profile, worksheet answers and progress, and any fundraisers or materials you created. You can't undo this.</p>
     <div class="field"><label for="del-confirm">Type <b>DELETE</b> to confirm</label><input id="del-confirm" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
-    ${FB_ON?`<p class="del-note">Google will ask you to sign in once more to confirm it's you.</p>`:""}
+    ${FB_ON&&currentUser.provider==="password"?`<div class="field"><label for="del-pw">Your password</label><input id="del-pw" type="password" autocomplete="current-password"></div>`
+      :FB_ON?`<p class="del-note">Google will ask you to sign in once more to confirm it's you.</p>`:""}
     <div id="delMsg"></div>
     <button class="btn btn-danger btn-block" id="delGo" disabled>Delete my account</button>
     <button class="btn btn-outline btn-block" id="delCancel" style="margin-top:10px">Keep my account</button>
@@ -851,11 +923,12 @@ function openDeleteAccount(){
     $("#delCancel",m).onclick=closeModal;
     go.onclick=async()=>{
       go.disabled=true; go.textContent="Deleting…";
-      try{ await deleteAccount(); closeModal(); navigate("/"); toast("Your account has been deleted.") }
+      try{ await deleteAccount($("#del-pw",m)?.value||""); closeModal(); navigate("/"); toast("Your account has been deleted.") }
       catch(e){
         go.disabled=false; go.textContent="Delete my account";
         const msg = e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request" ? "Sign-in was cancelled, so nothing was deleted."
                   : e.code==="auth/user-mismatch" ? "Please sign in with the same Google account you use for Pioneher."
+                  : ["auth/wrong-password","auth/invalid-credential","auth/missing-password","auth/invalid-login-credentials"].includes(e.code) ? "That password isn't right, so nothing was deleted."
                   : "Couldn't delete your account. Check your connection and try again.";
         $("#delMsg",m).innerHTML=`<p class="form-note warn">${msg}</p>`;
       }
