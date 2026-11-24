@@ -109,7 +109,7 @@ const MATERIALS = [{category:"Pitch Deck", title:"Pitch deck template", url:LINK
    logo is optional: put an image in /images/partners/ and add its path; without one, the card shows the partner's initials.
    wordmark:true shows the partner's name in the tile when they have a text logo. */
 const PARTNERS = [
-  {name:"비교파트", url:"https://apartmentcompare.org/", desc:"실거주 데이터로 나에게 딱 맞는 아파트를 찾아주는 서비스", logo:"/images/partners/bigyopart.png"}
+  {name:"Bigyopateu", url:"https://apartmentcompare.org/", desc:"Uses real residents' data to find the apartment that's right for you.", logo:"/images/partners/bigyopart.png"}
 ];
 // Homepage "Our Partners" section. Set to true to show it again.
 const SHOW_HOME_PORTFOLIO = false;
