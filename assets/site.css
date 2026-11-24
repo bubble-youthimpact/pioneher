@@ -9,14 +9,14 @@ img{max-width:100%}
   --blue:#005CAB; --blue-dark:#004A8B; --yellow:#FBC02D; --yellow-dark:#E9AE14;
   --ink:#16181D; --body:#2B2F36; --muted:#5B6270; --line:#DDE1E7;
   --bg:#FFFFFF; --band:#F2F3F5; --navy:#1E4278; --footer:#131A29; --red:#D0312D;
-  --font:"League Spartan",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --font:"League Spartan","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   --wrap:1120px; --radius:18px; --header-h:72px;
   color-scheme:light;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
-body{font-family:var(--font);font-size:16px;line-height:1.55;color:var(--body);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{font-family:var(--font);font-size:16px;line-height:1.55;color:var(--body);background:var(--bg);-webkit-font-smoothing:antialiased;word-break:keep-all;overflow-wrap:break-word}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:60;background:#fff}
 h1,h2,h3,h4{font-family:var(--font);color:var(--ink);line-height:1.15;margin:0;text-wrap:balance;font-weight:700}
 p{margin:0}
@@ -419,6 +419,29 @@ a.dl-title:hover{color:var(--blue);text-decoration:underline}
 
 /* Empty states inside card grids: span the full row and center */
 .grid-2>.empty,.grid-3>.empty,.grid-4>.empty{grid-column:1/-1;text-align:center;padding:56px 16px;margin:0 auto;max-width:46ch;text-wrap:balance}
+
+/* ---------- Portfolio (big logo tiles, Primer-style) ---------- */
+.pgrid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px 24px}
+@media (max-width:900px){.pgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 18px}}
+@media (max-width:420px){.pgrid{gap:24px 14px}.pcard-name{font-size:16px}.pcard-desc{font-size:13.5px}.pcard-logo{border-radius:14px}.pcard-sample{top:8px;left:8px}}
+.pcard{display:grid;gap:10px;color:var(--body)}
+.pcard-logo{position:relative;display:grid;place-items:center;aspect-ratio:4/3;max-width:100%;border-radius:20px;background:#fff;border:1px solid var(--line);overflow:hidden;color:var(--blue);transition:border-color .2s,box-shadow .2s,transform .2s;margin-bottom:6px}
+.home-portfolio .pcard-logo{background:var(--band);border-color:transparent}
+.pcard:hover .pcard-logo{border-color:var(--blue);box-shadow:0 14px 30px rgba(19,26,41,.10);transform:translateY(-3px)}
+.pcard-logo img{width:100%;height:100%;object-fit:contain;padding:16%}
+.pcard-logo svg{width:100%;height:100%;display:block}
+.pcard-logo text{fill:currentColor;font-family:var(--font);font-weight:700;font-size:40px;letter-spacing:.02em}
+.pcard-sample{position:absolute;top:12px;left:12px}
+.pcard-name{display:block;color:var(--ink);font-weight:700;font-size:20px;line-height:1.25;overflow-wrap:anywhere}
+.pcard-name svg{display:inline-block;vertical-align:-2px;margin-left:6px;color:var(--muted);transition:color .15s,transform .15s}
+.pcard:hover .pcard-name svg{color:var(--blue);transform:translate(2px,-2px)}
+.pcard-desc{font-size:15px;line-height:1.5;color:var(--muted)}
+@media (max-width:600px){.pcard-name{font-size:17px}.pcard-desc{font-size:14px}.pcard-logo{border-radius:16px}}
+.home-portfolio .wrap{padding-block:clamp(56px,8vw,96px)}
+.hp-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap;margin-bottom:32px}
+.hp-head h2{font-size:clamp(32px,4.2vw,46px);margin-top:12px}
+.hp-all{white-space:nowrap;font-size:16px}
+.hp-all:hover{text-decoration:underline}
 
 /* ---------- Footer ---------- */
 .site-footer{background:var(--footer);color:#fff}

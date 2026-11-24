@@ -44,7 +44,7 @@ const LINKS = {
    ===================================================================== */
 const NAV = [
   ["/about","About"],["/curriculum","Curriculum"],["/resources","Resources"],
-  ["/stories","Stories"],["/crowdfunding","Crowdfunding"],["/apply","Join/Apply"],["/contact","Contact"]
+  ["/stories","Stories"],["/portfolio","Portfolio"],["/crowdfunding","Crowdfunding"],["/apply","Join/Apply"],["/contact","Contact"]
 ];
 
 const SESSIONS = [
@@ -104,6 +104,15 @@ const WORKSHEETS = {
 
 const CATEGORIES = ["Idea Validation","Pitch Deck","Finance","Marketing","Fundraising"];
 const MATERIALS = [{category:"Pitch Deck", title:"Pitch deck template", url:LINKS.pitchDeckTemplate}];
+
+/* Portfolio: partners shown on /portfolio. Each card opens the partner's website in a new tab.
+   logo is optional: put an image in /images/partners/ and add its path; without one, the card shows the partner's initials.
+   wordmark:true shows the partner's name in the tile when they have a text logo. */
+const PARTNERS = [
+  {name:"비교파트", url:"https://apartmentcompare.org/", desc:"실거주 데이터로 나에게 딱 맞는 아파트를 찾아주는 서비스", logo:"/images/partners/bigyopart.png"}
+];
+// Homepage "Our Partners" section. Set to true to show it again.
+const SHOW_HOME_PORTFOLIO = false;
 
 const VIDEOS = ["Do_LjDsisIE","YkEzLn_FhN8","niOV_jSVCKs","KHq_EDi2PE8","UIJUgnykkOA","vRy-_w4cvT8","_xNE5G5Q0qQ","TGo_AH67jVI","OgR4xYO8GtY","7CLwzoqfhY0","bRBLPJguU-0"];
 
@@ -583,6 +592,7 @@ const VIEWS = {
         <div class="ctas">${link("/apply","Come Work With Us","btn btn-yellow")}${link("/about","Learn More","btn btn-blue")}</div>
       </div>
     </section>
+    ${homePortfolioHTML()}
     ${ISSUE}${MISSION}
     <section class="wrap done">
       <h2>What We've Done So Far</h2>
@@ -638,6 +648,10 @@ const VIEWS = {
       </div>`}
     </div></section>`,
 
+  "/portfolio": ()=>`${banner("Portfolio","The organizations we partner with to mentor, fund and connect young female entrepreneurs.")}
+    <section class="band page-min"><div class="wrap">
+      ${PARTNERS.length?`<ul class="pgrid">${PARTNERS.map(partnerCard).join("")}</ul>`:`<p class="empty">Our partners will be listed here soon.</p>`}
+    </div></section>`,
   "/stories": ()=>`
     ${banner("Stories","Learn more about Pioneher through our stories")}
     <section class="band"><div class="wrap">
@@ -961,6 +975,26 @@ function reviewQueueHTML(){
     </li>`).join("")}</ul>`:`<p class="empty">Nothing is waiting for review.</p>`}
   </div>`;
 }
+// Portfolio card: big logo tile, then name and one-line description. Opens the partner's site.
+const partnerInitials = n => n.replace(/[^A-Za-z0-9가-힣 ]/g,"").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?";
+// Fit a text logo inside the tile (Korean characters are about twice as wide as Latin letters).
+const wordmarkSize = n => Math.min(40, Math.floor(118/[...n].reduce((t,c)=>t+(/[\u3131-\uD79D]/.test(c)?1:0.6),0)));
+function partnerCard(p){
+  return `<li><a class="pcard" href="${esc(p.url)}" target="_blank" rel="noopener" aria-label="${esc(p.name)}: ${esc(p.desc)} (opens their website in a new tab)">
+    <span class="pcard-logo${p.logo?" has-img":""}">${p.logo?`<img src="${esc(asset(p.logo))}" alt="" loading="lazy">`
+      :`<svg viewBox="0 0 160 120" aria-hidden="true"><text x="80" y="60" dy=".33em" text-anchor="middle"${p.wordmark?` style="font-size:${wordmarkSize(p.name)}px"`:""}>${esc(p.wordmark?p.name:partnerInitials(p.name))}</text></svg>`}
+      ${p.sample?`<span class="status draft pcard-sample">Sample</span>`:""}</span>
+    <span class="pcard-name">${esc(p.name)}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></span>
+    <span class="pcard-desc">${esc(p.desc)}</span>
+  </a></li>`;
+}
+function homePortfolioHTML(){
+  if(!SHOW_HOME_PORTFOLIO || !PARTNERS.length) return "";
+  return `<section class="home-portfolio"><div class="wrap">
+    <div class="hp-head"><div><div class="eyebrow">Portfolio</div><h2>Our Partners</h2></div>${PARTNERS.length>6?link("/portfolio",`View all ${PARTNERS.length} <span aria-hidden="true">→</span>`,"text-link hp-all"):link("/portfolio",`See portfolio <span aria-hidden="true">→</span>`,"text-link hp-all")}</div>
+    <ul class="pgrid">${PARTNERS.slice(0,6).map(partnerCard).join("")}</ul>
+  </div></section>`;
+}
 function worksheetHTML(s){
   const fields=WORKSHEETS[s.slug]; if(!fields) return "";
   const p=progress[s.slug], saved=(p&&p.answers)||store.get("ws:"+s.slug,{});
@@ -1047,6 +1081,7 @@ const PAGE_META = {
   "/about":       {"title":"About | Pioneher","desc":"Why Pioneher exists: gender inequality limits women founders. Meet our mission and the team supporting young female entrepreneurs."},
   "/curriculum":  {"title":"Curriculum | Pioneher","desc":"Five free video sessions with worksheets on idea development, the lean canvas, business strategy, pitch decks and building an MVP."},
   "/resources":   {"title":"Resources | Pioneher","desc":"Free tools to launch your startup: turn your business idea into a website and create customer surveys in minutes."},
+  "/portfolio":   {"title":"Portfolio | Pioneher","desc":"The organizations Pioneher partners with to mentor, fund and connect young female entrepreneurs."},
   "/stories":     {"title":"Stories | Pioneher","desc":"Videos, articles and reports about successful female founders to inspire the next generation of women entrepreneurs."},
   "/crowdfunding":{"title":"Crowdfunding | Pioneher","desc":"Support young women and the businesses they are passionate about, or start your own fundraiser on Pioneher."},
   "/apply":       {"title":"Join / Apply | Pioneher","desc":"Apply to join Pioneher's mentoring program for young female entrepreneurs."},
@@ -1059,7 +1094,7 @@ function setMeta(title,desc){
   document.title=title;
   const m=document.querySelector('meta[name="description"]'); if(m&&desc) m.setAttribute("content",desc);
 }
-const TITLES={"/":"Pioneher","/about":"About","/curriculum":"Curriculum","/resources":"Resources","/stories":"Stories","/crowdfunding":"Crowdfunding","/apply":"Join / Apply","/contact":"Contact","/profile":"My Profile","/privacy":"Privacy Policy","/terms":"Terms of Service"};
+const TITLES={"/":"Pioneher","/about":"About","/curriculum":"Curriculum","/resources":"Resources","/stories":"Stories","/portfolio":"Portfolio","/crowdfunding":"Crowdfunding","/apply":"Join / Apply","/contact":"Contact","/profile":"My Profile","/privacy":"Privacy Policy","/terms":"Terms of Service"};
 
 function render(scrollTop=true){
   const path=currentPath(); let html, title;
